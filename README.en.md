@@ -16,6 +16,16 @@ Reads the API responses behind the category pages of the WeChat mini program "Xi
 
 ![dashboard](docs/screenshots/dashboard.png)
 
+## What it is for
+
+The point is to hand the whole price list to an AI and have it work out what to buy, not to redistribute data. In practice:
+
+- **Picking food** — out of a thousand-plus items on sale, narrow down what is worth buying this week instead of scrolling the app for ten minutes and still not deciding
+- **Comparing prices** — compute unit prices across the same product, e.g. `230g × 6` versus loose 500g, or a discount price against the usual one
+- **Planning meals** — work backwards from the ingredients you bought to dishes you can actually cook, so less food spoils
+
+The output is structured JSON with name, price, spec, tags and category, ready to feed to a model as-is.
+
 ## Requirements
 
 | | |
@@ -128,9 +138,17 @@ The debug proxy injects code into the WeChat process, which looks like malware b
 - [wmpfdebugger](https://github.com/evi0s/wmpfdebugger): WMPF debug proxy; this project adds environment scrubbing on top
 - [Frida](https://frida.re/): runtime injection
 
-## Disclaimer
+## Notice
 
-For personal study and data analysis. It captures product information that your own account can already see in the app. Do not use it for commercial scraping or to put load on the service.
+This project is for personal study and data analysis. It is not affiliated with, authorised by, or endorsed by Meituan or Xiaoxiang Market.
+
+Only public product information visible to the owner's own account is read: name, price, spec, tags and image. No credentials, payment details or other users' data are touched, and no private endpoint is called.
+
+The data is used to feed an AI with grocery prices for personal shopping decisions — what to buy, what is cheaper by unit, what can be cooked. It is not offered as a data service, not redistributed, and not used commercially.
+
+If any content, screenshot or method in this repository infringes your rights, please open an [Issue](https://github.com/Horizen5/xiaoxiang-capture/issues) explaining the situation. I will remove the offending content and stop updating the project once verified.
+
+Check whether this complies with the target platform's terms of service and your local law before use. You are responsible for any consequences of using this project.
 
 ## License
 
