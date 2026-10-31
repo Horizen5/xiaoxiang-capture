@@ -1,0 +1,189 @@
+{
+ "code": 0,
+ "data": {
+  "poiCategories": [
+   {
+    "id": 40488,
+    "name": "蔬菜豆制品",
+    "icon": "https://p1.meituan.net/mallimages/b56c8c2dd5004eb45e8cb2e31b89490e49268.png",
+    "leaf": 0,
+    "type": 100,
+    "skuCount": 487,
+    "subPoiCategories": [
+     {
+      "id": 40488,
+      "name": "为你推荐",
+      "leaf": 0,
+      "type": 1,
+      "subPoiCategories": [
+       {
+        "id": 40488,
+        "name": "全部",
+        "leaf": 1,
+        "type": 301,
+        "skuCount": 487,
+        "individualSort": 0
+       },
+       {
+        "id": 7000211,
+        "name": "省心价",
+        "leaf": 1,
+        "type": 307,
+        "skuCount": 74,
+        "individualSort": 0
+       },
+       {
+        "id": 7001603,
+        "name": "健康粗粮",
+        "leaf": 1,
+        "type": 307,
+        "skuCount": 35,
+        "individualSort": 0
+       }
+      ],
+      "jumpUrl": "imaicai://www.maicai.com/category_list?category_id=40488&sub_category_id=40488",
+      "individualSort": 0
+     },
+     {
+      "id": 45035,
+      "name": "在家火锅",
+      "leaf": 0,
+      "type": 5,
+      "skuCount": 76,
+      "subPoiCategories": [
+       {
+        "id": 45035,
+        "name": "全部",
+        "leaf": 1,
+        "type": 301,
+        "skuCount": 76,
+        "individualSort": 0
+       },
+       {
+        "id": 7002150,
+        "name": "叶菜/芽苗菜",
+        "leaf": 1,
+        "type": 302,
+        "skuCount": 15,
+        "individualSort": 0
+       },
+       {
+        "id": 7002151,
+        "name": "菌菇/瓜茄",
+        "leaf": 1,
+        "type": 302,
+        "skuCount": 10,
+        "individualSort": 0
+       }
+      ],
+      "jumpUrl": "imaicai://www.maicai.com/category_list?category_id=40488&sub_category_id=45035",
+      "promotionResourceId": 7002149,
+      "titleImage": {
+       "url": "https://img.meituan.net/mallimages/front-category-third-config-qoKHNUZwICW9hSZV9HeSS-1791786091712.png",
+       "width": 168,
+       "height": 96
+      },
+      "individualSort": 0
+     }
+    ],
+    "moreUrl": {
+     "text": "查看全部",
+     "iretail": "imaicai://www.maicai.com/category_list?category_id=40488&sub_category_id=40488"
+    },
+    "individualSort": 0,
+    "displayDeliveryFilter": 0
+   },
+   {
+    "id": 40532,
+    "name": "水果鲜花",
+    "icon": "https://p1.meituan.net/mallimages/d29e4ec6b06bddc1237376cfb07933f031909.png",
+    "leaf": 0,
+    "type": 100,
+    "skuCount": 298,
+    "subPoiCategories": [
+     {
+      "id": 40532,
+      "name": "时令推荐",
+      "leaf": 0,
+      "type": 1,
+      "subPoiCategories": [
+       {
+        "id": 40532,
+        "name": "全部",
+        "leaf": 1,
+        "type": 301,
+        "skuCount": 298,
+        "individualSort": 0
+       },
+       {
+        "id": 303681,
+        "name": "省心价",
+        "leaf": 1,
+        "type": 307,
+        "skuCount": 10,
+        "individualSort": 0
+       },
+       {
+        "id": 302552,
+        "name": "小象独家",
+        "leaf": 1,
+        "type": 307,
+        "skuCount": 8,
+        "individualSort": 0
+       }
+      ],
+      "jumpUrl": "imaicai://www.maicai.com/category_list?category_id=40532&sub_category_id=40532",
+      "individualSort": 0
+     },
+     {
+      "id": 1003,
+      "name": "会员折扣",
+      "leaf": 0,
+      "type": 4,
+      "skuCount": 29,
+      "subPoiCategories": [
+       {
+        "id": 45640,
+        "name": "全部",
+        "leaf": 1,
+        "type": 301,
+        "skuCount": 29,
+        "individualSort": 0
+       },
+       {
+        "id": 7001282,
+        "name": "严选",
+        "leaf": 1,
+        "type": 306,
+        "skuCount": 13,
+        "individualSort": 0
+       },
+       {
+        "id": 7000499,
+        "name": "西瓜/瓜果类",
+        "leaf": 1,
+        "type": 306,
+        "skuCount": 1,
+        "individualSort": 0
+       }
+      ],
+      "jumpUrl": "imaicai://www.maicai.com/category_list?category_id=40532&sub_category_id=1003",
+      "bubbleImage": {
+       "title": "会员",
+       "url": "https://p0.meituan.net/mallimages/ec023c5fe652981c607d42b427838cdd1152.png",
+       "width": 24,
+       "height": 24
+      },
+      "individualSort": 0
+     }
+    ],
+    "moreUrl": {
+     "text": "查看全部",
+     "iretail": "imaicai://www.maicai.com/category_list?category_id=40532&sub_category_id=40532"
+    },
+    "individualSort": 0,
+    "displayDeliveryFilter": 0
+   }
+  ]
+ }
+}
