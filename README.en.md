@@ -1,20 +1,18 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4?style=flat-square" alt="platform">
-  <img src="https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square" alt="python">
-  <img src="https://img.shields.io/badge/node-18%2B-339933?style=flat-square" alt="node">
-  <img src="https://img.shields.io/badge/protocol-CDP-4285F4?style=flat-square" alt="cdp">
-  <img src="https://img.shields.io/badge/license-MIT-3DA639?style=flat-square" alt="license">
-</p>
-
-[简体中文](README.md) | **English**
-
 # Xiaoxiang Market Capture
 
 Reads the API responses behind the category pages of the WeChat mini program "Xiaoxiang Market" (小象超市), stores them as local JSON, downloads the product images, and serves a local dashboard showing capture progress.
 
+> [简体中文](README.md) | **English**
+
 - Only reads responses the mini program already received; no replay, no modified parameters
 - Dashboard listens on `127.0.0.1:8899` only
 - Works with manual scrolling, or lets the script page through at a fixed pace
+
+![platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4)
+![python](https://img.shields.io/badge/python-3.10%2B-3776AB)
+![node](https://img.shields.io/badge/node-18%2B-339933)
+![protocol](https://img.shields.io/badge/protocol-CDP-4285F4)
+![license](https://img.shields.io/badge/license-MIT-success)
 
 ![dashboard](docs/screenshots/dashboard.png)
 

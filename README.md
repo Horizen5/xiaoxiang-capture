@@ -1,20 +1,18 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4?style=flat-square" alt="platform">
-  <img src="https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square" alt="python">
-  <img src="https://img.shields.io/badge/node-18%2B-339933?style=flat-square" alt="node">
-  <img src="https://img.shields.io/badge/protocol-CDP-4285F4?style=flat-square" alt="cdp">
-  <img src="https://img.shields.io/badge/license-MIT-3DA639?style=flat-square" alt="license">
-</p>
-
-**简体中文** | [English](README.en.md)
-
 # 小象超市小程序抓包
 
 读取微信小程序「小象超市」分类页的接口响应，保存到本地 JSON，同时下载商品图，并提供一个本地看板显示抓取进度。
 
+> **简体中文** | [English](README.en.md)
+
 - 只读取小程序自己发出的响应，不重放请求，不改参数
 - 看板跑在 `127.0.0.1:8899`，不监听外网
 - 支持手动翻页抓取，也可以让脚本按固定节奏补页
+
+![platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4)
+![python](https://img.shields.io/badge/python-3.10%2B-3776AB)
+![node](https://img.shields.io/badge/node-18%2B-339933)
+![protocol](https://img.shields.io/badge/protocol-CDP-4285F4)
+![license](https://img.shields.io/badge/license-MIT-success)
 
 ![看板](docs/screenshots/dashboard.png)
 
