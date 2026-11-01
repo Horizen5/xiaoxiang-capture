@@ -80,8 +80,11 @@ const debugServer = (options: CliOptions, logger: Logger): WebSocketServer  => {
         ws.on("error", (err) => {
             logger.error("[miniapp] miniapp client err:", err);
         });
-        ws.on("close", () => {
-            logger.info("[miniapp] miniapp client disconnected");
+        ws.on("close", (code: number, reason: Buffer) => {
+            // 带上关闭码：小程序那侧崩了/主动关掉/被我们踢掉，code 是不一样的，
+            // 排查「连上就断」时这是唯一能拿到的一手信息
+            const r = reason && reason.length ? `, reason=${reason.toString()}` : "";
+            logger.info(`[miniapp] miniapp client disconnected (code=${code}${r})`);
         });
     });
 
@@ -139,8 +142,9 @@ const proxyServer = (options: CliOptions, logger: Logger): WebSocketServer => {
         ws.on("error", (err) => {
             logger.error("[cdp] CDP client err:", err);
         });
-        ws.on("close", () => {
-            logger.info("[cdp] CDP client disconnected");
+        ws.on("close", (code: number, reason: Buffer) => {
+            const r = reason && reason.length ? `, reason=${reason.toString()}` : "";
+            logger.info(`[cdp] CDP client disconnected (code=${code}${r})`);
         });
     });
 
