@@ -47,15 +47,29 @@ cd tools\wmpfdebugger && npm install && cd ..\..
 
 ## Usage
 
-1. Close the mini program completely (close the window, don't just navigate back)
-2. Double-click `start beta.bat` and wait for "调试代理已就绪" (debug proxy ready)
-3. Open the mini program and go to its category page
-4. Open <http://127.0.0.1:8899/> in a browser
-5. Scroll through the pages; the counters on the dashboard update as you go
+Two launch scripts are included:
+
+| Script | Behaviour |
+|---|---|
+| `启动抓包.bat` | Runs in the background. Double-click and it goes; the dashboard page opens by itself once it is up. Double-clicking again while it runs only reopens the page, it does not start a second copy |
+| `start_beta.bat` | Runs in the foreground, so the window shows progress such as "调试代理已就绪" and "小程序已连上". Use this one when something goes wrong |
+
+From a shell, `--daemon` detaches from the current terminal:
+
+```bat
+python tools\start_beta.py --daemon
+```
+
+Steps:
+
+1. Double-click `启动抓包.bat`
+2. Close the mini program completely (close the window, navigating back does not count)
+3. Open it again and go to the category page
+4. Scroll through the pages; the counters on the dashboard update as you go
 
 The mini program must be started after the launcher. The CDP session is attached when the mini program process starts, so one that is already running will not be picked up.
 
-The "启动小程序" (launch) button in the dashboard header automates step 3: it brings an existing window to the front, or opens it through the WeChat search shortcut. Measured at 2.8 seconds.
+The dashboard is at <http://127.0.0.1:8899/>.
 
 ## Data
 
@@ -80,9 +94,12 @@ Product fields live under `data.contents[0].subModule.contents[0].showContents..
 
 ```
 xiaoxiang-capture/
-├── start beta.bat           # entry point
+├── 启动抓包.bat            # entry point, runs in background
+├── start_beta.bat           # foreground run, shows progress
 ├── tools/
 │   ├── start_beta.py        # launcher, supervises the three processes
+│   ├── start_hidden.bat     # source of 启动抓包.bat (GBK encoded)
+│   ├── _mkbat.py            # regenerates it; edit the LINES list there
 │   ├── live_capture.py      # capture, reads responses over CDP
 │   ├── monitor_server.py    # dashboard server
 │   ├── make_image_index.py  # image index generator
@@ -113,6 +130,12 @@ mini program ──CDP(62000)── wmpfdebugger ──▶ live_capture.py ─�
 
 **Dashboard counts.** Declared counts come from `skuCount` in `_category_tree.json`. Incomplete categories render as `captured-declared` in amber; complete ones show just the actual count. Reaching the end of the list counts as complete, since some categories declare 31 items but only return 24.
 
+**Starting twice.** A second launch probes port 8899 first. If the service is alive it opens the dashboard page and prints "已启动网页" without spawning anything; if the pid record is there but the process is gone, the old one is cleared and everything restarts.
+
+**Running in the background.** `start_beta.py --daemon` relaunches itself with `DETACHED_PROCESS` and exits, so the service is not tied to the terminal that started it. The `启动抓包.bat` batch file uses that path.
+
+**The batch file is stored as GBK.** cmd reads batch files using the system ANSI code page; saved as UTF-8 the Chinese prompts turn into question marks. To change `启动抓包.bat`, edit the `LINES` list in `tools/_mkbat.py` and regenerate it rather than editing the batch file directly.
+
 ## Known issues
 
 - WeChat for Windows has no external deep link for mini programs. `weixin://launchapplet` exists in `Weixin.dll` but only works when called from inside the WeChat process. `weixin://dl/business/?appid=` needs a token issued by the server and otherwise lands on a blank page. The fallback is UI automation, or the `.lnk` WeChat creates for "add to desktop".
@@ -132,6 +155,14 @@ They keep their original CDN filenames. 312 product names contain characters suc
 **Why does antivirus flag it?**
 
 The debug proxy injects code into the WeChat process, which looks like malware behaviour. The full source is here if you want to check.
+
+**I double-clicked and no browser appeared.**
+
+The page opens once the dashboard is up, so give it a couple of seconds. If nothing shows, open <http://127.0.0.1:8899/> yourself. The server only listens on 127.0.0.1 and is not reachable from other machines.
+
+**The "启动小程序" button does nothing.**
+
+When WeChat is minimised to the tray its window still exists but `IsWindowVisible` returns false, and an earlier version gave up at that point. It now falls back to the hidden window and brings it back. If it still fails, click the WeChat icon in the tray first to show the main window.
 
 ## Credits
 

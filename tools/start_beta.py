@@ -498,12 +498,39 @@ def wait_miniapp(timeout=None):
         time.sleep(1.5)
 
 
+def detach_self():
+    """把自己交给系统，脱离当前 shell 会话。
+
+    在交互式会话里直接跑 start_beta，父进程一退（或被中断）整棵进程树会被一起收走，
+    抓包和看板跟着没。这里用 DETACHED_PROCESS 重新拉起自己，本进程立刻退出，
+    之后服务归系统管，不受调用方影响。
+    """
+    DETACHED = 0x00000008
+    NEW_GROUP = 0x00000200
+    NO_WINDOW = 0x08000000
+    args = [a for a in sys.argv[1:] if a != '--daemon']
+    subprocess.Popen([sys.executable, os.path.abspath(__file__)] + args,
+                     cwd=BASE,
+                     stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL,
+                     creationflags=DETACHED | NEW_GROUP | NO_WINDOW,
+                     close_fds=True)
+    print('已在后台启动，稍候会自动打开看板网页')
+    print('  看板 http://127.0.0.1:8899/')
+    sys.stdout.flush()
+    os._exit(0)
+
+
 def main():
     args = sys.argv[1:]
     # 默认纯手动翻页（不自己发包）。要脚本空闲时自动补页，加 --cruise。
     # 10-30 出过一次滑块验证，怀疑与重放发包有关，所以默认关。
     cruise = '--cruise' in args
     open_browser = '--no-open' not in args
+
+    if '--daemon' in args:
+        detach_self()
 
     if sys.platform == 'win32':
         try:
@@ -518,9 +545,24 @@ def main():
 
     others = another_supervisor()
     if others:
-        say('已经有一个 beta 在运行（pid %s），不用重复启动。' % ', '.join(map(str, others)), '[!!]')
-        say('要重启就先关掉那个窗口。')
-        return
+        # 已经有一份在跑：看板活着就直接把网页打开，别让用户自己找地址。
+        if board_up():
+            say('已经有一个 beta 在运行（pid %s）。' % ', '.join(map(str, others)), '[OK]')
+            if open_browser:
+                try:
+                    webbrowser.open(BOARD_URL)
+                    say('已启动网页：%s' % BOARD_URL, '[OK]')
+                except Exception as e:
+                    say('网页没打开，手动访问：%s（%s）' % (BOARD_URL, e), '[!!]')
+            else:
+                say('网页地址：%s' % BOARD_URL, '[OK]')
+            return
+        # 记录还在、看板却没了：上一轮半死不活，接管重来
+        say('上一轮的记录还在（pid %s），但看板没在运行，重新拉起 ...'
+            % ', '.join(map(str, others)), '[..]')
+        for p in others:
+            kill_pid(p)
+        clean_pidfile('_supervisor.pid')
     write_pidfile('_supervisor.pid')
 
     # 1) 清掉上一轮的抓包/看板（版本更新后不能还跑着旧代码）

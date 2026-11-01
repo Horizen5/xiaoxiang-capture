@@ -123,14 +123,28 @@ def windows(proc_filter=None, visible_only=False, min_size=(60, 60)):
 
 
 def wechat_main():
-    """微信主窗口：Weixin.exe 的可见 Qt 窗口，标题「微信」。"""
-    for w in windows(('weixin.exe',), visible_only=True, min_size=(400, 400)):
-        if w['title'] == '微信' or w['title'].startswith('微信'):
-            if w['cls'].startswith('Qt'):
+    """微信主窗口：Weixin.exe 的 Qt 窗口，标题「微信」。
+
+    微信经常被收到托盘，这时窗口还在（hwnd 有效、标题正常），只是
+    IsWindowVisible 为假。所以先找可见的，找不到就退回找隐藏的并恢复显示，
+    否则从托盘状态启动会一直报「没找到微信主窗口」。
+    """
+    vis = [w for w in windows(('weixin.exe',), visible_only=True, min_size=(400, 400))
+           if w['cls'].startswith('Qt')]
+    if vis:
+        for w in vis:
+            if (w['title'] or '').startswith('微信'):
                 return w
-    for w in windows(('weixin.exe',), visible_only=True, min_size=(400, 400)):
-        if w['cls'].startswith('Qt'):
-            return w
+        return vis[0]
+
+    hid = [w for w in windows(('weixin.exe',), visible_only=False, min_size=(400, 400))
+           if w['cls'].startswith('Qt') and (w['title'] or '').startswith('微信')]
+    if hid:
+        w = hid[0]
+        u.ShowWindow(w['hwnd'], 9)          # SW_RESTORE：把托盘的窗口放回来
+        time.sleep(0.35)
+        w['vis'] = True
+        return w
     return None
 
 
@@ -156,7 +170,9 @@ def focus(hwnd):
             if u.AttachThreadInput(cur, tid, True):
                 attached.append(tid)
     try:
-        if u.IsIconic(hwnd):
+        # 托盘里的窗口 IsIconic 为假但 IsWindowVisible 也为假，
+        # 两种状态都要先 ShowWindow 才能拿到前台。
+        if u.IsIconic(hwnd) or not u.IsWindowVisible(hwnd):
             u.ShowWindow(hwnd, 9)
         u.BringWindowToTop(hwnd)
         u.SetForegroundWindow(hwnd)
