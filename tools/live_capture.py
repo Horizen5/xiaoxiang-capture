@@ -23,6 +23,9 @@ IMGDIR = os.path.join(BASE, 'live_imgs')
 STATUS = os.path.join(BASE, 'live_status.txt')
 META = os.path.join(OUTDIR, '_meta.jsonl')
 CUR = os.path.join(OUTDIR, '_current.json')
+# 链路心跳：位置没变的时候 _current.json 不会重写，看板光看它分不清
+# 「一直停在同一页」和「根本就没接上」。这个文件只回答一个问题：还连着吗。
+LINK = os.path.join(OUTDIR, '_link.json')
 os.makedirs(OUTDIR, exist_ok=True)
 os.makedirs(IMGDIR, exist_ok=True)
 
@@ -415,6 +418,15 @@ def dump_current(sel):
         pass
 
 
+def dump_link(ok, why=''):
+    """写链路心跳。看板靠它判断「跟随」到底还连不连着，而不是傻等一个不动的位置。"""
+    try:
+        with open(LINK, 'w', encoding='utf-8') as f:
+            json.dump({'ts': time.time(), 'ok': bool(ok), 'why': why}, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
 # 小程序当前位置：由 sel_watcher 高频刷新，供看板秒级跟随。
 # 不放在主循环里，否则会被抓取循环的 1.2 秒 sleep 拖慢。
 SEL_STATE = {'sel': {}, 'ts': 0.0, 'raw': ''}
@@ -422,6 +434,8 @@ SEL_STATE = {'sel': {}, 'ts': 0.0, 'raw': ''}
 
 async def sel_watcher(c, holder):
     raw_last = ''
+    last_beat = 0.0
+    fails = 0
     while True:
         try:
             sid, cid = holder.get('sid'), holder.get('cid')
@@ -431,21 +445,38 @@ async def sel_watcher(c, holder):
                     "(function(){try{var s=(globalThis.__SEL?globalThis.__SEL():null);"
                     "if(s&&s.top!=null)return JSON.stringify(s);}catch(e){}"
                     "return JSON.stringify(globalThis.__CUR||{});})()", tmo=5)
-                if cs and isinstance(cs, str) and cs != raw_last and cs != '{}':
-                    raw_last = cs
-                    try:
-                        sel = json.loads(cs)
-                    except Exception:
-                        sel = {}
-                    # 只在分类页（有 top）才更新，离开分类页保持最后位置
-                    if isinstance(sel, dict) and sel.get('top') is not None:
-                        if sel != SEL_STATE['sel']:
-                            SEL_STATE['sel'] = sel
-                            SEL_STATE['ts'] = time.time()
-                            SEL_STATE['raw'] = cs
-                            dump_current(sel)
+                if cs and isinstance(cs, str):
+                    fails = 0
+                    # 心跳优先级最高：能读到就说明调试链路是通的
+                    if time.time() - last_beat > 1.0:
+                        last_beat = time.time()
+                        dump_link(True)
+                    if cs != raw_last and cs != '{}':
+                        raw_last = cs
+                        try:
+                            sel = json.loads(cs)
+                        except Exception:
+                            sel = {}
+                        # 只在分类页（有 top）才更新，离开分类页保持最后位置
+                        if isinstance(sel, dict) and sel.get('top') is not None:
+                            if sel != SEL_STATE['sel']:
+                                SEL_STATE['sel'] = sel
+                                SEL_STATE['ts'] = time.time()
+                                SEL_STATE['raw'] = cs
+                                dump_current(sel)
+                else:
+                    # 读不到：连续几次就把心跳打灭，看板立刻能看出「没接上」
+                    fails += 1
+                    if fails == 6:
+                        dump_link(False, '位置读不到（小程序关了 / 调试通道断了）')
+            else:
+                fails += 1
+                if fails == 6:
+                    dump_link(False, '还没抓到小程序上下文')
         except Exception:
-            pass
+            fails += 1
+            if fails == 6:
+                dump_link(False, '位置监听异常')
         await asyncio.sleep(0.15)
 
 
@@ -1102,6 +1133,7 @@ async def cruiser(c, holder):
 
 async def run_session():
     log('v3 启动，等待小程序连接 CDP ...')
+    dump_link(False, '正在等小程序连上调试代理')
     try:
         from _pidutil import write_pid
         write_pid('_capture.pid', base=BASE)

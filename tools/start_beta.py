@@ -19,6 +19,7 @@ import asyncio
 import ctypes
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -117,6 +118,33 @@ def mini_targets(force=False):
     return n
 
 
+def proxy_hooked_pid():
+    """从代理日志里读它最后一次把 hook 注进了哪个 PID。
+
+    微信整批重启小程序宿主（WeChatAppEx 全换 pid）时，frida 原来那个目标就没了，
+    hook 跟着失效。但代理进程自己还活着、端口还在听，于是「看起来一切正常、
+    实际一个 target 都接不到」—— 这次跟随失效就是这个。
+    所以要把这个 pid 读出来，跟「它还在不在」对上，才能识破这种假健康。
+    """
+    try:
+        with open(PROXY_LOG, 'rb') as f:
+            data = f.read().decode('utf-8', 'ignore')
+    except Exception:
+        return 0
+    m = None
+    for m in re.finditer(r'\[frida\] script loaded,.*?pid:\s*(\d+)', data):
+        pass
+    return int(m.group(1)) if m else 0
+
+
+def proxy_hook_alive():
+    """代理里那次 frida 注入还活着吗？False = hook 已失效，需要重启代理。"""
+    pid = proxy_hooked_pid()
+    if not pid:
+        return None           # 还没注入完，别急着判定
+    return pid_alive(pid)
+
+
 def board_up():
     return http_json('http://127.0.0.1:%d/api/cur' % BOARD_PORT, tmo=1.5) is not None
 
@@ -206,6 +234,44 @@ def kill(name):
             except Exception:
                 pass
     procs[name] = None
+
+
+def pid_listening(port):
+    """谁在听这个端口。代理可能是上一轮拉起来的，本进程没句柄，只能按端口找。"""
+    try:
+        out = subprocess.run(['netstat', '-ano', '-p', 'TCP'],
+                             capture_output=True, text=True, encoding='gbk',
+                             errors='ignore',
+                             creationflags=CREATE_NO_WINDOW).stdout
+    except Exception:
+        return 0
+    for line in out.splitlines():
+        f = line.split()
+        if len(f) >= 5 and f[0].upper() == 'TCP' and f[3].upper() == 'LISTENING' \
+                and f[1].endswith(':%d' % port):
+            try:
+                return int(f[4])
+            except ValueError:
+                pass
+    return 0
+
+
+def kill_port_owner(port, wait=6):
+    """按端口把监听者干掉（连同 tsx 拉起来的子 node）。"""
+    pid = pid_listening(port)
+    if not pid:
+        return True
+    try:
+        subprocess.run(['taskkill', '/F', '/T', '/PID', str(pid)],
+                       capture_output=True, encoding='gbk', errors='ignore',
+                       creationflags=CREATE_NO_WINDOW)
+    except Exception:
+        pass
+    for _ in range(int(wait / 0.5)):
+        if not port_open(port):
+            return True
+        time.sleep(0.5)
+    return not port_open(port)
 
 
 _node_cache = {'path': None, 'done': False}
@@ -653,6 +719,24 @@ def main():
         if not alive('capture'):
             say('抓包进程退出了，重新拉起 ...', '[!!]')
             start_capture(cruise)
+
+        # hook 体检：代理活着 ≠ hook 活着。
+        # 微信重启小程序宿主后，frida 注入的进程就没了，代理却还在听端口，
+        # 于是「一切正常」地一个 target 都接不到（跟随就是这么哑掉的）。
+        if proxy_up() and now - STATE.get('hook_check_at', 0) > 15:
+            STATE['hook_check_at'] = now
+            ok = proxy_hook_alive()
+            if ok is False:
+                say('调试代理的注入已失效（微信重启过小程序），重新注入 ...', '[!!]')
+                kill('proxy')
+                kill_port_owner(PROXY_PORT)      # 可能是上一轮拉起的，本进程没句柄
+                STATE['no_node'] = False
+                if start_proxy():
+                    if wait_miniapp(timeout=25):
+                        say('小程序已重新连上', '[OK]')
+                        last_connected = True
+                    else:
+                        say('代理已重挂，请把小程序整个关掉再打开一次', '[..]')
 
         # 连接状态变化单独提醒。
         # 只在「还没连上」时探测：连上以后每 2 秒开一条短 CDP 连接去问，

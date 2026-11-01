@@ -215,7 +215,10 @@ const autoDetectConfig = async (
     }
 };
 
-const fridaServer = async (options: CliOptions, logger: Logger): Promise<frida.Session> => {
+const fridaServer = async (
+    options: CliOptions,
+    logger: Logger,
+): Promise<{ session: frida.Session; pid: number }> => {
     const localDevice = await frida.getLocalDevice();
     const { pid: wmpfPid, version: wmpfVersion } = await platform.findWmpfProcess()
 
@@ -284,7 +287,53 @@ const fridaServer = async (options: CliOptions, logger: Logger): Promise<frida.S
         `[frida] script loaded, WMPF version: ${wmpfVersion}, pid: ${wmpfPid}`,
     );
     logger.info(`[frida] you can now open any miniapps`);
-    return session;
+    return { session, pid: wmpfPid };
+};
+
+/**
+ * 微信会整个重启小程序宿主（WeChatAppEx 换一批 pid）。
+ * 那时 frida 原来注入的那个进程已经没了 —— hook 跟着一起失效，
+ * 但代理进程还活着、端口还在听，外面看起来「一切正常」，
+ * 实际小程序再也连不上 9421，看板的「跟随」就永久哑掉（这次就是这个）。
+ *
+ * 所以这里盯住注入时那个 pid：它不在了就说明微信重启过，重新注入一次。
+ * 重新注入后小程序需要重开才能接上（远端调试地址是启动时读的）。
+ */
+const fridaWatchdog = (options: CliOptions, logger: Logger,
+                       first: { session: frida.Session; pid: number }) => {
+    let current = first;
+    let busy = false;              // 重挂可能要十几秒（自动找偏移），别叠着跑
+    const timer = setInterval(async () => {
+        if (busy) return;
+        try {
+            // 进程还在就什么都不用做
+            if (current.pid && processAlive(current.pid)) return;
+            busy = true;
+            logger.info(
+                `[frida] 注入的进程 ${current.pid} 已经退出（微信重启过小程序），重新注入 ...`,
+            );
+            try { await current.session.detach(); } catch (e) { /* 进程没了，detach 会失败，忽略 */ }
+            current = await fridaServer(options, logger);
+            logger.info("[frida] 重新注入完成 —— 请把小程序整个关掉再打开一次");
+        } catch (e) {
+            // 微信可能正处在重启中间态，下一轮再试
+            logger.error("[frida] 重新注入失败，稍后重试:", e);
+        } finally {
+            busy = false;
+        }
+    }, 3000);
+    timer.unref?.();
+    return timer;
+};
+
+const processAlive = (pid: number): boolean => {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (e: any) {
+        // EPERM 说明进程还在，只是没权限发信号
+        return e && e.code === "EPERM";
+    }
 };
 
 const main = async () => {
@@ -292,13 +341,15 @@ const main = async () => {
     const logger = create_logger(options);
     const debugWss = debugServer(options, logger);
     const proxyWss = proxyServer(options, logger);
-    const fridaSession = await fridaServer(options, logger);
+    const hooked = await fridaServer(options, logger);
+    // 微信重启小程序宿主后自动重挂，否则代理会「活着但没用」
+    fridaWatchdog(options, logger, hooked);
 
     process.on("SIGINT", async () => {
         logger.info("[server] shutting down...");
         debugWss.close();
         proxyWss.close();
-        await fridaSession.detach();
+        await hooked.session.detach();
         process.exit(0);
     });
 };

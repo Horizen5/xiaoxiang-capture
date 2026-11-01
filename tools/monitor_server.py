@@ -17,6 +17,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 RAW = os.path.join(BASE, 'live_raw')
 IMGS = os.path.join(BASE, 'live_imgs')
 CUR = os.path.join(RAW, '_current.json')
+LINK = os.path.join(RAW, '_link.json')      # 链路心跳：还连着小程序吗
 MODE_F = os.path.join(BASE, '_mode.json')      # 自动/手动开关，抓包端每轮都读它
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8899
 
@@ -27,6 +28,7 @@ _scan_cache = {'t': 0, 'key': None, 'data': None}
 _pic_cache = {}
 _imgs_cache = {'t': 0, 'set': set()}
 _cur_cache = {'sig': None, 'data': {}}
+_link_cache = {'sig': None, 'data': {}}
 
 PAGE_DEFAULT = 20
 FN_RE = re.compile(r'^c(\d+)((?:_[a-z]+\d+)*)_o(\d+)\.json$')
@@ -472,6 +474,28 @@ def read_cur():
         return {}
 
 
+def read_link():
+    """链路心跳。10 秒内没更新就算断线 —— 位置文件是「变了才写」，
+    光看它分不清「一直停在这页」和「压根没连上」，跟随按钮会显得没反应。"""
+    try:
+        st = os.stat(LINK)
+        sig = (st.st_mtime_ns, st.st_size)
+        if _link_cache['sig'] == sig:
+            d = dict(_link_cache['data'])
+        else:
+            d = json.load(open(LINK, encoding='utf-8'))
+            _link_cache['sig'] = sig
+            _link_cache['data'] = d
+        age = time.time() - (d.get('ts') or 0)
+        d['stale'] = age > 10
+        d['age'] = round(age, 1)
+        d['ok'] = bool(d.get('ok')) and not d['stale']
+        return d
+    except Exception:
+        return {'ok': False, 'stale': True, 'age': None,
+                'why': '抓包端还没起来（没有心跳文件）'}
+
+
 def build_state():
     tree = load_tree() or []
     sub_b, third_b, total_sku, npage = scan_all(tree)
@@ -542,6 +566,7 @@ def state():
             _scan_cache['data'] = d
             d = dict(d)
     d['cur'] = read_cur()
+    d['link'] = read_link()
     return d
 
 
@@ -586,9 +611,12 @@ h1{font-size:14px;font-weight:600;letter-spacing:.2px}
 .here{margin-left:auto;font-size:11.5px;color:var(--tx2);display:flex;align-items:center;gap:6px;white-space:nowrap}
 .here b{color:var(--g);font-weight:600}
 .here .dot{width:5px;height:5px;border-radius:50%;background:var(--g)}
+.here .dot.warn{background:#E0A020;box-shadow:0 0 0 3px rgba(224,160,32,.16)}
+.here .wname{color:#A06800;font-weight:600}
 .fol{flex:none;font-size:11px;padding:2px 9px;border-radius:10px;border:1px solid var(--line);
   background:#fff;color:var(--tx2);cursor:pointer;line-height:1.6}
 .fol.on{background:var(--g);color:#fff;border-color:var(--g)}
+.fol.off{background:#FFF6E2;color:#A06800;border-color:#F0D9A8}
 .fol.away{background:#fff;color:var(--g);border-color:var(--g);font-weight:600}
 .fol.away::after{content:' ↺'}
 .here.hit{animation:pop .55s ease}
@@ -643,6 +671,9 @@ section{flex:1;min-width:0;display:flex;flex-direction:column}
 .path .hint{color:#9A9A92;background:#F7F7F4;padding:1px 7px;border-radius:9px}
 .path .hint.warn{color:#A06800;background:#FFF6E2}
 .path .hint.ok{color:#12A05C;background:#E8F6EF}
+.here .hint{color:#9A9A92;background:#F7F7F4;padding:1px 7px;border-radius:9px;max-width:260px;
+  overflow:hidden;text-overflow:ellipsis}
+.here .hint.warn{color:#A06800;background:#FFF6E2}
 .sb .mt.warn{color:#A06800;opacity:1}
 .chip.warn .n{color:#C77B22;opacity:1;font-weight:600}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(156px,1fr));gap:9px}
@@ -738,10 +769,12 @@ window.addEventListener('popstate',function(){
 /* ---- 反向跟随：你在小程序里点到哪，看板就自动跳到那一层（含三级分支） ---- */
 let FOLLOW=true;
 try{ FOLLOW = localStorage.getItem('wb_follow')!=='0'; }catch(e){}
-let lastCurKey='', curSeen=false, manualAway=false;
+let lastCurKey='', curSeen=false, manualAway=false, linkOk=true;
 function updateFollowUI(){
   const b=$('folBtn'); if(!b) return;
   if(!FOLLOW){ b.textContent='已暂停跟随'; b.className='fol'; b.title='已暂停；点一下恢复跟随，并立刻跳到小程序当前位置'; return; }
+  if(!linkOk){ b.textContent='未接上'; b.className='fol off';
+    b.title='抓包端没连上小程序，跟随暂时没有数据源；连上后会自动恢复。看这里：把小程序整个关掉再打开一次'; return; }
   if(manualAway){ b.textContent='回到小程序位置'; b.className='fol on away';
     b.title='你正在看别的分类；点一下回到小程序当前那一页'; return; }
   b.textContent='跟随中'; b.className='fol on';
@@ -845,19 +878,28 @@ setInterval(loadMode,5000);
 
 /* 高频轮询当前位置（200ms）：只拉几百字节，命中变化就立刻跳，不等 1.5 秒的统计刷新 */
 let CUR_CACHE={}, hereCache='';
-function renderHere(c){
-  const h=(c&&c.top!=null)
-    ? `<span class="dot"></span>小程序正在看：<b>${esc(c.subName||'')}</b>${c.thirdName?' / '+esc(c.thirdName):''}`
-    : '';
+function renderHere(c, lk){
+  let h='';
+  if(lk && lk.ok===false){
+    // 心跳断了：宁可明说「没接上」，也别拿几十小时前的旧位置假装跟着
+    const why=(lk.why||'').trim();
+    h=`<span class="dot warn"></span><span class="wname">小程序未接上</span>`+
+      (c&&c.top!=null?`<span class="hint">最后位置：${esc(c.subName||'')}${c.thirdName?' / '+esc(c.thirdName):''}</span>`:'')+
+      (why?`<span class="hint warn">${esc(why)}</span>`:'');
+  } else if(c&&c.top!=null){
+    h=`<span class="dot"></span>小程序正在看：<b>${esc(c.subName||'')}</b>${c.thirdName?' / '+esc(c.thirdName):''}`;
+  }
   if(h!==hereCache){ hereCache=h; $('hereTxt').innerHTML=h; }
 }
 async function pollCur(){
   try{
     const r=await (await fetch('/api/cur')).json();
     const c=r.cur||{};
+    const lk=r.link||{ok:true};
     CUR_CACHE=c;
     if(S) S.cur=c;
-    renderHere(c);
+    if(lk.ok!==linkOk){ linkOk=lk.ok; updateFollowUI(); }
+    renderHere(c, lk);
     if(!S||!S.tops||!S.tops.length) return;
     if(!FOLLOW||c.top==null) return;
     const sig=curSig(c);
@@ -1101,8 +1143,9 @@ class H(BaseHTTPRequestHandler):
             return self._send(json.dumps(state(), ensure_ascii=False).encode('utf-8'),
                               'application/json; charset=utf-8')
         if p == '/api/cur':
-            # 极轻量：只返回小程序当前位置，供前端高频轮询
-            return self._send(json.dumps({'cur': read_cur(), 'ts': time.time()},
+            # 极轻量：只返回小程序当前位置 + 链路心跳，供前端高频轮询
+            return self._send(json.dumps({'cur': read_cur(), 'link': read_link(),
+                                          'ts': time.time()},
                                          ensure_ascii=False).encode('utf-8'),
                               'application/json; charset=utf-8')
         if p == '/api/launch':
