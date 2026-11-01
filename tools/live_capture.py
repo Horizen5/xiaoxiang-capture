@@ -478,7 +478,7 @@ async def sel_watcher(c, holder):
             else:
                 fails += 1
                 if fails == 12:
-                    dump_link(False, '正在等小程序连上调试代理')
+                    dump_link(False, '正在等小程序连上调试代理（把小程序关掉再打开一次）')
         except Exception:
             fails += 1
             if fails == 12:
@@ -1139,7 +1139,7 @@ async def cruiser(c, holder):
 
 async def run_session():
     log('v3 启动，等待小程序连接 CDP ...')
-    dump_link(False, '正在等小程序连上调试代理')
+    dump_link(False, '正在等小程序连上调试代理（把小程序关掉再打开一次）')
     try:
         from _pidutil import write_pid
         write_pid('_capture.pid', base=BASE)

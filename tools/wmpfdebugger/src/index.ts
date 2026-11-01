@@ -244,11 +244,56 @@ const fridaServer = async (
     }
 
     let configContent: string | null = null;
+    // 偏移只跟 WMPF 版本有关，识别一次就够。缓存起来下次直接命中，
+    // 否则每次重挂（微信重启小程序宿主后看门狗会重挂）都要重新扫一遍内存，几十秒。
+    const configDir = path.join(projectRoot, "frida/config", process.platform);
+    const cachePath = path.join(configDir, `addresses.${wmpfVersion}.json`);
+
+    const readCachedConfig = async (): Promise<string | null> => {
+        try {
+            const parsed = JSON.parse(
+                (await promises.readFile(cachePath)).toString(),
+            );
+            if (!parsed || parsed.Version !== wmpfVersion) {
+                return null;
+            }
+            return JSON.stringify(parsed);
+        } catch (e) {
+            return null;
+        }
+    };
+
     if (options.autoDetect) {
-        logger.info(`[frida] auto-detecting hook offsets...`);
-        const config = await autoDetectConfig(session, projectRoot, wmpfVersion);
-        configContent = JSON.stringify(config);
-        logger.info(`[frida] detected hook offsets: ${configContent}`);
+        configContent = await readCachedConfig();
+        if (configContent) {
+            logger.info(
+                `[frida] 命中偏移缓存（WMPF ${wmpfVersion}），跳过自动识别: ${cachePath}`,
+            );
+        } else {
+            logger.info(`[frida] auto-detecting hook offsets...`);
+            const t0 = Date.now();
+            const config = await autoDetectConfig(
+                session,
+                projectRoot,
+                wmpfVersion,
+            );
+            configContent = JSON.stringify(config);
+            logger.info(
+                `[frida] detected hook offsets: ${configContent} (用时 ${(
+                    (Date.now() - t0) / 1000
+                ).toFixed(1)}s)`,
+            );
+            try {
+                await promises.mkdir(configDir, { recursive: true });
+                await promises.writeFile(
+                    cachePath,
+                    JSON.stringify(config, null, 4),
+                );
+                logger.info(`[frida] 偏移已写入缓存，下次直接秒开: ${cachePath}`);
+            } catch (e) {
+                logger.info(`[frida] 偏移缓存写入失败（不影响本次运行）: ${e}`);
+            }
+        }
     } else {
         try {
             configContent = (
