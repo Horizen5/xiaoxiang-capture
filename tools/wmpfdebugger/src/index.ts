@@ -329,6 +329,14 @@ const fridaServer = async (
             return;
         }
 
+        // 钩子自己的进度（onEnter / 改写后的 ws 地址）必须常开：
+        // 排查「装上了但没生效」时，这几行是唯一能区分「没触发」和「触发了没改对」的证据。
+        const payload = message.payload;
+        if (typeof payload === "string" && /^\[(hook|inteceptor|patch)\]/.test(payload)) {
+            logger.info(`[frida] ${payload}`);
+            return;
+        }
+
         logger.frida_debug("[frida client]", message.payload);
     });
     await script.load();
@@ -352,6 +360,9 @@ const fridaWatchdog = (options: CliOptions, logger: Logger,
                        first: { session: frida.Session; pid: number }) => {
     let current = first;
     let busy = false;              // 重挂可能要十几秒（自动找偏移），别叠着跑
+    let fails = 0;                 // 连续失败次数，用来给日志节流
+    // 0.8 秒一轮：小程序冷启动从拉起进程到加载 applet 只有几秒，
+    // 轮询太慢就会「注入得比加载还晚」，钩子白装、还得再关一次小程序。
     const timer = setInterval(async () => {
         if (busy) return;
         try {
@@ -363,14 +374,19 @@ const fridaWatchdog = (options: CliOptions, logger: Logger,
             );
             try { await current.session.detach(); } catch (e) { /* 进程没了，detach 会失败，忽略 */ }
             current = await fridaServer(options, logger);
+            fails = 0;
             logger.info("[frida] 重新注入完成 —— 请把小程序整个关掉再打开一次");
         } catch (e) {
-            // 微信可能正处在重启中间态，下一轮再试
-            logger.error("[frida] 重新注入失败，稍后重试:", e);
+            // 微信可能正处在重启中间态（新的一批 WeChatAppEx 还没起来），下一轮再试。
+            // 0.8 秒一轮会刷屏，所以只在前两次吭声。
+            fails += 1;
+            if (fails <= 2) {
+                logger.error("[frida] 重新注入失败，继续重试:", e);
+            }
         } finally {
             busy = false;
         }
-    }, 3000);
+    }, 800);
     timer.unref?.();
     return timer;
 };

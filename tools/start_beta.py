@@ -352,7 +352,11 @@ def start_proxy():
     if not os.path.exists(tsx):
         say('找不到 tsx（%s），请先在 tools/wmpfdebugger 里 npm i' % tsx, '[!!]')
         return False
-    spawn('proxy', [node, tsx, 'src\\index.ts', '--auto-detect'], PROXY_DIR, PROXY_LOG,
+    proxy_args = [node, tsx, 'src\\index.ts', '--auto-detect']
+    # 排障开关：钩子到底有没有吃到 OnLoadStart，只有代理的 frida 调试日志能回答
+    if os.environ.get('XIAOXIANG_DEBUG_FRIDA'):
+        proxy_args.append('--debug-frida')
+    spawn('proxy', proxy_args, PROXY_DIR, PROXY_LOG,
           detached=True)   # 独立进程：启动器关掉它也不死，下次启动不用重开小程序
     for _ in range(40):
         time.sleep(1.0)

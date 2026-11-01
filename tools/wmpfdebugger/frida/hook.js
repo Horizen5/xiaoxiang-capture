@@ -139,13 +139,22 @@ const handleOnLoadStart = (a1, config) => {
         1005, 1007, 1008, 1011, 1012, 1027, 1035, 1037, 1053, 1074, 1145, 1178,
         1256, 1260, 1302, 1308,
     ];
-    if (!sceneNumberArray.includes(miniappScenePtr.readInt())) {
+    const scene = miniappScenePtr.readInt();
+    // 1000 会让宿主直接崩（issue #83），这个必须挡掉；其余入口都安全。
+    // 原来只放行上面那十几个 scene，从桌面快捷方式 / weixin:// 协议唤起时
+    // scene 不在表里就直接 return —— 钩子明明装上了却什么都不做，
+    // 表现就是「手动从微信里点开能连、双击桌面图标死活连不上」。
+    if (scene === 1000) {
+        send("[hook] scene 1000 跳过（会让宿主崩溃）");
         return;
     }
 
-    send(`[hook] scene: ${miniappScenePtr.readInt()}`);
-    send("[hook] hook scene condition -> 1101");
+    send(`[hook] scene: ${scene}`);
+    // 一律改成 1101：实测从 weixin:// 协议唤起（scene 1023）时，光把 ws 地址
+    // 和 remote debug 改成 1 还不够，小程序仍然不会连回来；改成 1101 才会走
+    // 带调试的那条加载分支。1101 本身就是上游列表里认可的安全值。
     miniappScenePtr.writeInt(1101);
+    send("[hook] hook scene condition -> 1101");
 
     if (config.SceneOffsets) {
         // legacy path, we are done here
