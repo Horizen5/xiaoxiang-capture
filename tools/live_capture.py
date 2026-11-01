@@ -436,6 +436,7 @@ async def sel_watcher(c, holder):
     raw_last = ''
     last_beat = 0.0
     fails = 0
+    ever_ok = False      # 这一轮里有没有成功读到过位置：用来区分「刚连上还在就绪」和「真的断了」
     while True:
         try:
             sid, cid = holder.get('sid'), holder.get('cid')
@@ -447,6 +448,7 @@ async def sel_watcher(c, holder):
                     "return JSON.stringify(globalThis.__CUR||{});})()", tmo=5)
                 if cs and isinstance(cs, str):
                     fails = 0
+                    ever_ok = True
                     # 心跳优先级最高：能读到就说明调试链路是通的
                     if time.time() - last_beat > 1.0:
                         last_beat = time.time()
@@ -465,17 +467,21 @@ async def sel_watcher(c, holder):
                                 SEL_STATE['raw'] = cs
                                 dump_current(sel)
                 else:
-                    # 读不到：连续几次就把心跳打灭，看板立刻能看出「没接上」
+                    # 读不到：连续 12 次（约 1.8 秒）才把心跳打灭。
+                    # 太灵敏的话，小程序页面切换时偶尔抖一下就会让看板闪「未接上」。
                     fails += 1
-                    if fails == 6:
-                        dump_link(False, '位置读不到（小程序关了 / 调试通道断了）')
+                    if fails == 12:
+                        if ever_ok:
+                            dump_link(False, '位置读不到（小程序关了 / 调试通道断了）')
+                        else:
+                            dump_link(False, '已连上调试代理，等小程序页面就绪（首次约 10–30 秒）')
             else:
                 fails += 1
-                if fails == 6:
-                    dump_link(False, '还没抓到小程序上下文')
+                if fails == 12:
+                    dump_link(False, '正在等小程序连上调试代理')
         except Exception:
             fails += 1
-            if fails == 6:
+            if fails == 12:
                 dump_link(False, '位置监听异常')
         await asyncio.sleep(0.15)
 

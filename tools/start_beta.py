@@ -593,6 +593,7 @@ def main():
     # 默认纯手动翻页（不自己发包）。要脚本空闲时自动补页，加 --cruise。
     # 10-30 出过一次滑块验证，怀疑与重放发包有关，所以默认关。
     cruise = '--cruise' in args
+    restart = '--restart' in args
     open_browser = '--no-open' not in args
 
     if '--daemon' in args:
@@ -610,6 +611,16 @@ def main():
     print('=' * 62)
 
     others = another_supervisor()
+    if others and restart:
+        # 改了代码要生效，就别再走「已经在跑 → 只帮你开网页」那条路，
+        # 直接把旧的整份停掉重来（代理不动，它能在多次启动之间复用，省一次 frida 识别）
+        say('重启：先停掉正在跑的那一份（pid %s）...' % ', '.join(map(str, others)), '[..]')
+        for p in others:
+            kill_pid(p)
+        clean_pidfile('_supervisor.pid')
+        kill_stale()
+        kill_port_owner(8899)
+        others = []
     if others:
         # 已经有一份在跑：看板活着就直接把网页打开，别让用户自己找地址。
         if board_up():

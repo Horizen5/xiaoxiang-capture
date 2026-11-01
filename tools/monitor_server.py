@@ -770,6 +770,10 @@ window.addEventListener('popstate',function(){
 let FOLLOW=true;
 try{ FOLLOW = localStorage.getItem('wb_follow')!=='0'; }catch(e){}
 let lastCurKey='', curSeen=false, manualAway=false, linkOk=true;
+/* 最近一次链路心跳。tick() 那条 1.5 秒的路径不带心跳参数，
+   以前它会按「已连上」去画，于是断线时位置栏 1.5 秒就被擦回「正在看…」，
+   200ms 后又变回「未接上」—— 看上去就是两行字来回闪。这里留一份最新的给它用。 */
+let linkState={ok:true, why:''};
 function updateFollowUI(){
   const b=$('folBtn'); if(!b) return;
   if(!FOLLOW){ b.textContent='已暂停跟随'; b.className='fol'; b.title='已暂停；点一下恢复跟随，并立刻跳到小程序当前位置'; return; }
@@ -879,6 +883,7 @@ setInterval(loadMode,5000);
 /* 高频轮询当前位置（200ms）：只拉几百字节，命中变化就立刻跳，不等 1.5 秒的统计刷新 */
 let CUR_CACHE={}, hereCache='';
 function renderHere(c, lk){
+  lk = lk || linkState;        // 没带心跳就用最近一次的，别默认当成「已连上」
   let h='';
   if(lk && lk.ok===false){
     // 心跳断了：宁可明说「没接上」，也别拿几十小时前的旧位置假装跟着
@@ -888,6 +893,9 @@ function renderHere(c, lk){
       (why?`<span class="hint warn">${esc(why)}</span>`:'');
   } else if(c&&c.top!=null){
     h=`<span class="dot"></span>小程序正在看：<b>${esc(c.subName||'')}</b>${c.thirdName?' / '+esc(c.thirdName):''}`;
+  } else {
+    // 链路通、但还没读到过分类位置（刚连上 / 停在小程序首页）
+    h=`<span class="dot"></span><span class="hint">已连上小程序，等你在小程序里点进任意分类</span>`;
   }
   if(h!==hereCache){ hereCache=h; $('hereTxt').innerHTML=h; }
 }
@@ -896,6 +904,7 @@ async function pollCur(){
     const r=await (await fetch('/api/cur')).json();
     const c=r.cur||{};
     const lk=r.link||{ok:true};
+    linkState=lk;
     CUR_CACHE=c;
     if(S) S.cur=c;
     if(lk.ok!==linkOk){ linkOk=lk.ok; updateFollowUI(); }
@@ -1067,6 +1076,10 @@ async function tick(){
     $('s3').textContent=d.stats.sku;
     $('s4').textContent=d.stats.imgs;
     $('s5').textContent=d.stats.declared||'-';
+    if(d.link){                   // 顺手用这条 1.5 秒的通道校准心跳，断线时按钮也能跟上
+      linkState=d.link;
+      if(d.link.ok!==linkOk){ linkOk=d.link.ok; updateFollowUI(); }
+    }
     renderHere(CUR_CACHE);
     if(!d.tops.length){$('tops').innerHTML='';return;}
     if(!booted){
